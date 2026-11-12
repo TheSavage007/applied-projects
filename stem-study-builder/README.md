@@ -52,10 +52,6 @@ Set the key as an environment variable on the server side.
 ANTHROPIC_API_KEY=your_key_here
 ```
 
-## Screenshots
-
-`[ Drop a screenshot of a generated set with an answer revealed. This one demos well live, so a short screen recording is even better. ]`
-
 ## Why this project
 
 I taught science for years across chemistry, biology, physics, and more, so I know what a fair practice question looks like. This project puts that judgment behind a working AI tool, and it shows I can engineer around a model, not just call one.
