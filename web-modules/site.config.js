@@ -1,126 +1,104 @@
 /**
  * site.config.js
- * Single source of truth for business details, services, and SEO.
- * Every component reads from here so a phone number or price only changes in one place.
- * This is the same constants.js pattern the locksmith build uses.
+ * Single source of truth for business details, brand tokens, services,
+ * and SEO metadata. Change a phone number, price, or color in one place.
+ *
+ * Works as an ES module (import { siteConfig } from './site.config.js')
+ * or as a plain script include (window.siteConfig).
  */
 
-export const BUSINESS = {
-  name: 'Company Name',
-  legalName: 'Company Name LLC',
-  tagline: 'One line that says exactly what you do.',
-  email: 'hello@example.com',
-  phone: '(000) 000-0000',
-  phoneHref: 'tel:+10000000000',
-  address: {
-    street: '0000 S Example Pkwy',
-    city: 'Phoenix',
-    state: 'AZ',
-    zip: '85044',
-    country: 'US',
-  },
-  hours: 'Monday to Sunday, 24 hours',
-  serviceArea: ['Ahwatukee', 'South Phoenix', 'Tempe', 'Chandler'],
-  serviceRadiusMiles: 25,
-};
-
-export const BRAND = {
-  charcoal: '#1C1C1E',
-  charcoal2: '#232326',
-  teal: '#5FBFB5',
-  tealDark: '#3D9E94',
-  gold: '#C8960C',
-  green: '#2D6A4F',
-  cream: '#F8F5F0',
-  line: '#3A3A3F',
-  fontDisplay: "'Cormorant Garamond', serif",
-  fontBody: "'Inter', sans-serif",
-};
-
-export const SERVICES = [
-  {
-    id: 'service-one',
-    name: 'Service One',
-    blurb: 'What the client walks away with, in one plain sentence.',
-    priceLabel: 'From $250',
-    priceFrom: 250,
-    unit: 'flat',
-  },
-  {
-    id: 'service-two',
-    name: 'Service Two',
-    blurb: 'What the client walks away with, in one plain sentence.',
-    priceLabel: 'From $300',
-    priceFrom: 300,
-    unit: 'flat',
-  },
-  {
-    id: 'service-three',
-    name: 'Service Three',
-    blurb: 'What the client walks away with, in one plain sentence.',
-    priceLabel: '$40 to $60 per hour',
-    priceFrom: 40,
-    unit: 'hour',
-  },
-];
-
-export const FORMS = {
-  provider: 'netlify', // 'netlify' or 'formspree'
-  formspreeEndpoint: '', // https://formspree.io/f/XXXXXXX
-  contactFormName: 'contact',
-  leadFormName: 'lead',
-};
-
-export const SEO = {
-  siteUrl: 'https://example.netlify.app',
-  title: 'Company Name | Phoenix, Arizona',
-  description: 'One sentence a search engine can show. Under 160 characters.',
-  ogImage: '/og.jpg',
-  twitter: '',
-};
-
-/** JSON-LD block for the head. Keeps schema in sync with the constants above. */
-export function localBusinessSchema() {
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'LocalBusiness',
-    name: BUSINESS.name,
-    url: SEO.siteUrl,
-    email: BUSINESS.email,
-    telephone: BUSINESS.phone,
+const siteConfig = {
+  business: {
+    name: "Business Name",
+    legalName: "Business Name LLC",
+    tagline: "Your tagline here",
+    phone: "(000) 000-0000",
+    email: "hello@example.com",
+    url: "https://example.com",
     address: {
-      '@type': 'PostalAddress',
-      streetAddress: BUSINESS.address.street,
-      addressLocality: BUSINESS.address.city,
-      addressRegion: BUSINESS.address.state,
-      postalCode: BUSINESS.address.zip,
-      addressCountry: BUSINESS.address.country,
+      street: "0000 Example St",
+      city: "Phoenix",
+      region: "AZ",
+      postalCode: "85000",
+      country: "US"
     },
-    areaServed: BUSINESS.serviceArea.map((a) => ({
-      '@type': 'Place',
-      name: a,
-    })),
-    openingHours: 'Mo-Su 00:00-23:59',
-    makesOffer: SERVICES.map((s) => ({
-      '@type': 'Offer',
-      name: s.name,
-      description: s.blurb,
-      priceCurrency: 'USD',
-      price: s.priceFrom,
-    })),
+    geo: { lat: 33.4484, lng: -112.0740 },
+    hours: "Mo-Fr 08:00-18:00, Sa 09:00-14:00",
+    priceRange: "$$"
+  },
+
+  brand: {
+    colorBg: "#12201F",
+    colorSurface: "#193130",
+    colorPrimary: "#5FBFB5",
+    colorAccent: "#C8960C",
+    colorText: "#F3F6F5",
+    fontDisplay: "'Cormorant Garamond', Georgia, serif",
+    fontBody: "'Inter', system-ui, sans-serif"
+  },
+
+  services: [
+    { id: "service-1", name: "Service One", base: 75 },
+    { id: "service-2", name: "Service Two", base: 120 },
+    { id: "service-3", name: "Service Three", base: 200 }
+  ],
+
+  // Flat per-mile fee applied beyond the free radius.
+  travel: { freeRadiusMiles: 10, perMile: 2.5 },
+
+  seo: {
+    title: "Business Name | Your tagline here",
+    description: "Short description of what the business does and where.",
+    ogImage: "https://example.com/og.jpg"
+  }
+};
+
+/**
+ * Travel fee for a given distance in miles.
+ * Ported from the locksmith project's pricing logic.
+ */
+function travelFee(miles, cfg = siteConfig) {
+  const { freeRadiusMiles, perMile } = cfg.travel;
+  if (!Number.isFinite(miles) || miles <= freeRadiusMiles) return 0;
+  return Math.round((miles - freeRadiusMiles) * perMile * 100) / 100;
+}
+
+/**
+ * JSON-LD LocalBusiness schema generator.
+ * Inject the return value into a <script type="application/ld+json"> tag.
+ */
+function localBusinessSchema(cfg = siteConfig) {
+  const b = cfg.business;
+  return {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    name: b.name,
+    legalName: b.legalName,
+    telephone: b.phone,
+    email: b.email,
+    url: b.url,
+    priceRange: b.priceRange,
+    openingHours: b.hours,
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: b.address.street,
+      addressLocality: b.address.city,
+      addressRegion: b.address.region,
+      postalCode: b.address.postalCode,
+      addressCountry: b.address.country
+    },
+    geo: {
+      "@type": "GeoCoordinates",
+      latitude: b.geo.lat,
+      longitude: b.geo.lng
+    }
   };
 }
 
-/** Travel fee math, ported from the locksmith calculator. */
-export function travelFee(miles, base = 40, perMile = 0.75) {
-  const m = Math.max(0, Number(miles) || 0);
-  if (m > BUSINESS.serviceRadiusMiles) return { total: null, outOfRange: true };
-  const total = base + m * perMile;
-  return {
-    base,
-    miles: m,
-    travel: +(m * perMile).toFixed(2),
-    total: +total.toFixed(2),
-    outOfRange: false,
-  };
+if (typeof window !== "undefined") {
+  window.siteConfig = siteConfig;
+  window.travelFee = travelFee;
+  window.localBusinessSchema = localBusinessSchema;
 }
+
+export { siteConfig, travelFee, localBusinessSchema };

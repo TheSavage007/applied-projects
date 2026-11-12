@@ -1,89 +1,108 @@
 /**
  * spa-router.js
- * Single page navigation used across the Oasis, Farms, Axiom and Locksmith builds.
+ * Minimal hash-based single-page-app router for a no-build static site.
  *
- * Markup contract:
- *   <main id="page-home" class="page active">...</main>
- *   <main id="page-services" class="page">...</main>
- *   <a data-route="services">Services</a>
+ * Features:
+ *  - Hash routing (#/, #/services, #/contact ...) — refresh-safe, no server config.
+ *  - Active nav state: adds .is-active to the matching [data-route] link.
+ *  - Scroll to top on navigation, unless the user prefers reduced motion.
+ *  - Dynamic document.title per route.
+ *  - Works as an ES module (import { initRouter }) or a plain <script> (window.initRouter).
  *
  * Usage:
- *   import { initRouter, sp } from './spa-router.js';
- *   initRouter({ default: 'home', onChange: (id) => console.log(id) });
+ *   initRouter({
+ *     routes: {
+ *       '/':        { view: 'home',     title: 'Home' },
+ *       '/services':{ view: 'services', title: 'Services' },
+ *       '/contact': { view: 'contact',  title: 'Contact' }
+ *     },
+ *     titleBase: 'Business Name',
+ *     onRoute: (route, path) => { ... }   // optional hook
+ *   });
+ *
+ * Markup contract:
+ *   - Nav links: <a href="#/services" data-route="/services">Services</a>
+ *   - Views:     <section data-view="services"> ... </section>  (hidden unless active)
  */
 
-const PAGE_SELECTOR = '.page';
-const ACTIVE_CLASS = 'active';
-
-let config = {
-  default: 'home',
-  scroll: true,
-  onChange: null,
-};
-
-/**
- * Show a page by id. "services" resolves to the element #page-services.
- */
-export function sp(id) {
-  const target = document.getElementById('page-' + id);
-  if (!target) {
-    console.warn('[router] no page found for id:', id);
-    return false;
-  }
-
-  document
-    .querySelectorAll(PAGE_SELECTOR)
-    .forEach((p) => p.classList.remove(ACTIVE_CLASS));
-  target.classList.add(ACTIVE_CLASS);
-
-  document.querySelectorAll('[data-route]').forEach((link) => {
-    link.classList.toggle(ACTIVE_CLASS, link.dataset.route === id);
-  });
-
-  if (config.scroll) {
-    const reduced = window.matchMedia(
-      '(prefers-reduced-motion: reduce)',
-    ).matches;
-    window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
-  }
-
-  history.replaceState(null, '', '#' + id);
-  document.title = buildTitle(id);
-
-  if (typeof config.onChange === 'function') config.onChange(id);
-  return true;
+function normalizePath(hash) {
+  let p = (hash || "").replace(/^#/, "");
+  if (!p.startsWith("/")) p = "/" + p;
+  // strip trailing slash except for root
+  if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
+  return p;
 }
 
-function buildTitle(id) {
-  const base = document.body.dataset.siteName || document.title.split(' | ')[0];
-  if (id === config.default) return base;
-  return base + ' | ' + id.charAt(0).toUpperCase() + id.slice(1);
+function prefersReducedMotion() {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
 }
 
-/**
- * Wire every [data-route] element and honor the hash on first load.
- */
-export function initRouter(options = {}) {
-  config = { ...config, ...options };
+function initRouter(options = {}) {
+  const routes = options.routes || { "/": { view: "home", title: "Home" } };
+  const titleBase = options.titleBase || document.title || "";
+  const notFound = options.notFound || "/";
+  const onRoute = typeof options.onRoute === "function" ? options.onRoute : null;
 
-  document.querySelectorAll('[data-route]').forEach((link) => {
-    link.addEventListener('click', (e) => {
-      e.preventDefault();
-      sp(link.dataset.route);
+  function render() {
+    let path = normalizePath(window.location.hash);
+    let route = routes[path];
+
+    if (!route) {
+      path = notFound;
+      route = routes[path] || Object.values(routes)[0];
+    }
+
+    // Toggle views
+    const views = document.querySelectorAll("[data-view]");
+    views.forEach((el) => {
+      const match = el.getAttribute("data-view") === route.view;
+      el.hidden = !match;
+      if (match) el.setAttribute("aria-current", "page");
+      else el.removeAttribute("aria-current");
     });
-  });
 
-  window.addEventListener('hashchange', () => {
-    const id = location.hash.replace('#', '');
-    if (id) sp(id);
-  });
+    // Active nav state
+    const links = document.querySelectorAll("[data-route]");
+    links.forEach((a) => {
+      const active = a.getAttribute("data-route") === path;
+      a.classList.toggle("is-active", active);
+      if (active) a.setAttribute("aria-current", "page");
+      else a.removeAttribute("aria-current");
+    });
 
-  const start = location.hash.replace('#', '') || config.default;
-  sp(start);
+    // Title
+    document.title = route.title
+      ? (titleBase ? route.title + " | " + titleBase : route.title)
+      : titleBase;
+
+    // Scroll to top (respect reduced motion)
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: prefersReducedMotion() ? "auto" : "smooth"
+    });
+
+    if (onRoute) onRoute(route, path);
+  }
+
+  window.addEventListener("hashchange", render);
+  window.addEventListener("DOMContentLoaded", render);
+
+  // If the DOM is already parsed when initRouter runs, render immediately.
+  if (document.readyState !== "loading") render();
+
+  // Ensure there is always a hash so refreshes land on a known route.
+  if (!window.location.hash) window.location.replace("#/");
+
+  return { render, navigate: (p) => { window.location.hash = "#" + normalizePath(p); } };
 }
 
-/* Non module fallback for standalone HTML files */
-if (typeof window !== 'undefined') {
-  window.sp = sp;
+if (typeof window !== "undefined") {
   window.initRouter = initRouter;
 }
+
+export { initRouter };
